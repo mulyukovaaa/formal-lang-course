@@ -1,44 +1,24 @@
-from networkx import Graph, MultiDiGraph, drawing
+from networkx import MultiDiGraph, drawing
 import cfpq_data
+from pathlib import Path
 
 
-class GraphInfo:
-    """Graph info.
+def get_graph_info(graph: MultiDiGraph) -> tuple[int, int, set]:
+    """Get graph info
 
-    Attributes
+    Parameters:
     ----------
-    number_of_nodes : int
-        The number of nodes in the graph.
-    number_of_edges : int
-        The number of edges in the graph.
-    unique_labels : set[str]
-        The set of labels in the graph.
-    """
-
-    number_of_nodes: int = 0
-    number_of_edges: int = 0
-    labels: set[str] = set()
-
-
-def get_graph_info(graph: Graph) -> GraphInfo:
-    """Get graph info.
-
-    Parameters
-    ----------
-    graph : Graph
+    graph : MultiDiGraph
         The graph from which to get the info.
 
-    Returns
+    Returns:
     -------
-    graph_info : GraphInfo
+    graph_info : tuple[int, int, set]
         The graph info.
     """
-    number_of_nodes = graph.number_of_nodes()
-    number_of_edges = graph.number_of_edges()
 
-    labels = {label for _, _, label in graph.edges.data(data="label")}
-
-    return GraphInfo(number_of_nodes, number_of_edges, labels)
+    labels = set([b for _, _, _, b in graph.edges(data="label", keys=True)])
+    return graph.number_of_nodes(), graph.number_of_edges(), labels
 
 
 def load_graph(graph_name: str) -> MultiDiGraph:
@@ -65,24 +45,39 @@ def load_graph(graph_name: str) -> MultiDiGraph:
     return graph
 
 
-def create_and_save_dot(
-    len1: int, len2: int, path: str, labels: tuple[str, str]
-) -> None:
-    """
-    Create a graph with cycles in DOT format and save it to a file.
+def create_two_cycle_labeled_graph(
+    first_cycle_nodes: int, second_cycle_nodes: int, labels: tuple[str, str]
+) -> MultiDiGraph:
+    """Create labeled two cycles graph
 
     Parameters:
     ----------
-    num_vertices of first cecles (int): The number of vertices in the graph.
-    num_vertices of second cecles (int): The number of vertices in the graph.
-    labels (tuple[str, str])): A tuple of edge labels to be used in the graph.
-    save_path (str): The name of the output file where the DOT representation of the graph will be saved.
+    first_cycle_nodes: int
+        The number of nodes in the first cycle.
+    second_cycle_nodes: int
+        The number of nodes in the second cycle.
+    labels: tuple[str, str]
+        Labels for graph.
 
     Returns:
-    ----------
-    None
+    ---------
+    graph: MultiDiGraph
+        Returns a labeled graph with two cycles.
     """
+    graph = cfpq_data.labeled_two_cycles_graph(
+        first_cycle_nodes, second_cycle_nodes, labels=labels
+    )
+    return graph
 
-    graph = cfpq_data.labeled_two_cycles_graph(len1, len2, labels=labels)
+
+def write_to_dot(graph: MultiDiGraph, path: Path) -> None:
+    """Write graph to dot file.
+
+    Parameters:
+    ----------
+    graph: MultiDiGraph
+
+    path: Path
+    """
     data = drawing.nx_pydot.to_pydot(graph)
     data.write_raw(path)
