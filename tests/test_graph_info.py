@@ -1,68 +1,71 @@
-from networkx import Graph, MultiDiGraph
-from project.graph_info import (
-    GraphInfo,
-    get_graph_info,
-    load_graph,
-    create_and_save_dot,
-)
+from project.graph_info import *
 from pathlib import Path
 import filecmp
+import os
 
 
-def test_get_graph_info_empty_graph():
-    graph = Graph()
+class TestInfo:
+    def test_get_graph_info_graph_dataset(self):
+        actual_graph = load_graph("skos")
+        assert actual_graph.number_of_nodes() == 144
+        assert actual_graph.number_of_edges() == 252
 
-    expected_graph_info = GraphInfo()
-    actual_graph_info = get_graph_info(graph)
+        actual_graph = load_graph("bzip")
+        assert 632 == actual_graph.number_of_nodes()
+        assert 556 == actual_graph.number_of_edges()
 
-    assert expected_graph_info == actual_graph_info
+    def test_get_graph_info_nonempty_graph(self):
+        graph = MultiDiGraph()
+        for i in range(10):
+            graph.add_node(i)
 
+        graph.add_edge(1, 3, label="a")
+        graph.add_edge(2, 3, label="b")
+        graph.add_edge(4, 1, label="a")
+        graph.add_edge(1, 4, label="c")
+        graph.add_edge(1, 2, label="d")
+        graph.add_edge(5, 6, label="e")
+        graph.add_edge(4, 5, label="f")
+        graph.add_edge(6, 7, label="g")
+        graph.add_edge(7, 8, label="i")
+        graph.add_edge(9, 10, label="k")
+        graph.add_edge(8, 10, label="l")
 
-def test_get_graph_info_nonempty_graph():
-    graph = MultiDiGraph()
-    for i in range(10):
-        graph.add_node(i)
+        expected_graph_info = [
+            11,
+            11,
+            ("a", "b", "c", "d", "e", "f", "g", "i", "k", "l"),
+        ]
 
-    graph.add_edge(1, 3, label="a")
-    graph.add_edge(2, 3, label="b")
-    graph.add_edge(4, 1, label="a")
-    graph.add_edge(1, 4, label="c")
-    graph.add_edge(1, 2, label="d")
-    graph.add_edge(5, 6, label="e")
-    graph.add_edge(4, 5, label="f")
-    graph.add_edge(6, 7, label="g")
-    graph.add_edge(7, 8, label="i")
-    graph.add_edge(9, 10, label="k")
-    graph.add_edge(8, 10, label="l")
+        actual_graph_info = get_graph_info(graph)
 
-    expected_graph_info = GraphInfo(
-        number_of_nodes=10,
-        number_of_edges=11,
-        labels={"a", "b", "c", "d", "e", "f", "g", "i", "k", "l"},
-    )
-    actual_graph_info = get_graph_info(graph)
+        assert actual_graph_info[0] == expected_graph_info[0]
+        assert actual_graph_info[1] == expected_graph_info[1]
+        assert set(actual_graph_info[2]) == set(expected_graph_info[2])
 
-    assert expected_graph_info == actual_graph_info
+    def test_create_labeled_two_cycle_graph(self):
+        graph = create_two_cycle_labeled_graph(2, 2, ("a", "b"))
+        assert graph.number_of_nodes() == 5
+        assert graph.number_of_edges() == 6
 
+    def test_save_graph_as_dot_file(self):
+        first_cycle_nodes = 2
+        second_cycle_nodes = 2
+        labels = ("a", "b")
+        path = Path("graph.dot")
+        path_actual = Path("graph_compare.dot")
 
-def test_load_graph_bzip():
-    actual_graph = load_graph("bzip")
+        graph = create_two_cycle_labeled_graph(
+            first_cycle_nodes, second_cycle_nodes, labels
+        )
+        write_to_dot(graph, path)
 
-    assert 632 == actual_graph.number_of_nodes()
-    assert 556 == actual_graph.number_of_edges()
+        graph_actual = cfpq_data.labeled_two_cycles_graph(
+            first_cycle_nodes, second_cycle_nodes, labels=labels
+        )
+        write_to_dot(graph_actual, path_actual)
 
+        assert filecmp.cmp(path, path_actual)
 
-def test_save_graph_as_dot_file():
-
-    graph = MultiDiGraph()
-    for i in [1, 2, 3]:
-        graph.add_node(i)
-    graph.add_edge(1, 3, label="a")
-    graph.add_edge(2, 3, label="b")
-
-    curr_dir_path = Path(__file__).resolve().parent
-    expected_file_path = curr_dir_path / "expected_graph_dot.dot"
-    actual_file_path = curr_dir_path / "actual_graph_dot.dot"
-
-    create_and_save_dot(graph, actual_file_path)
-    assert filecmp.cmp(expected_file_path, actual_file_path, shallow=False)
+        os.remove(path)
+        os.remove(path_actual)
