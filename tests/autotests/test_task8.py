@@ -9,7 +9,7 @@ import cfpq_data as cd
 import networkx as nx
 import pytest
 from networkx import MultiDiGraph
-from pyformlang import cfg
+from pyformlang import cfg, rsa
 
 # Fix import statements in try block to run tests
 try:
@@ -18,8 +18,9 @@ try:
     from project.task4 import reachability_with_constraints
     from project.task7 import cfpq_with_matrix
     from project.task6 import cfpq_with_hellings
+    from project.task8 import cfpq_with_tensor, cfg_to_rsm, ebnf_to_rsm
 except ImportError:
-    pytestmark = pytest.mark.skip("Task 7 is not ready to test!")
+    pytestmark = pytest.mark.skip("Task 8 is not ready to test!")
 
 REGEXP_CFG: dict[str, list[cfg.CFG]] = {
     "a": [cfg.CFG.from_text("S -> a"), cfg.CFG.from_text("S -> N B\nB -> $\nN -> a")],
@@ -93,6 +94,14 @@ GRAMMARS_DIFFERENT = [
     cfg.CFG.from_text("S -> $ | a S b | b S a | e S f | S S | c S d | d S c | f S e"),
 ]
 
+EBNF_GRAMMARS = [
+    """S -> ( Sab c* ) | ( a* Sbc )
+    Sab -> (a Sab b) | $
+    Sbc -> (b Sbc c) | $""",
+    "S -> a | b | (S ( c | d ) S ) | ( e S f ) | ( g S )",
+    "S -> ( ( a S b ) | ( b S a ) | ( c S d ) | ( d S c ) | ( e S f ) | (f S e) )*",
+]
+
 LABELS = ["a", "b", "c", "d", "e", "f", "g", "h"]
 
 LABEL = "label"
@@ -126,16 +135,16 @@ def graph(request) -> MultiDiGraph:
     return cd.graphs.labeled_scale_free_graph(n_of_nodes, labels=LABELS)
 
 
-class TestReachabilityMatrixAlgorithm:
+class TestReachabilityTensorAlgorithm:
     @pytest.mark.parametrize(
         "regex_str, cfg_list", REGEXP_CFG.items(), ids=lambda regexp_cfgs: regexp_cfgs
     )
-    def test_rpq_cfpq_matrix(self, graph, regex_str, cfg_list) -> None:
+    def test_rpq_cfpq_tensor(self, graph, regex_str, cfg_list) -> None:
         start_nodes, final_nodes = generate_rnd_start_and_final(graph)
 
         for cf_gram in cfg_list:
-            cfpq: set[tuple[int, int]] = cfpq_with_matrix(
-                cf_gram, deepcopy(graph), start_nodes, final_nodes
+            cfpq: set[tuple[int, int]] = cfpq_with_tensor(
+                cfg_to_rsm(cf_gram), deepcopy(graph), start_nodes, final_nodes
             )
             rpq: dict[int, set[int]] = reachability_with_constraints(
                 FiniteAutomaton(graph_to_nfa(graph, start_nodes, final_nodes)),
@@ -151,8 +160,8 @@ class TestReachabilityMatrixAlgorithm:
     def test_different_grammars(self, graph, eq_grammars):
         start_nodes, final_nodes = generate_rnd_start_and_final(graph)
         eq_cfpqs = [
-            cfpq_with_matrix(
-                deepcopy(cf_gram), deepcopy(graph), start_nodes, final_nodes
+            cfpq_with_tensor(
+                cfg_to_rsm(deepcopy(cf_gram)), deepcopy(graph), start_nodes, final_nodes
             )
             for cf_gram in eq_grammars
         ]
@@ -160,7 +169,7 @@ class TestReachabilityMatrixAlgorithm:
             assert a == b
 
     @pytest.mark.parametrize("grammar", GRAMMARS_DIFFERENT, ids=lambda g: g)
-    def test_hellings_matrix(self, graph, grammar):
+    def test_hellings_matrix_tensor(self, graph, grammar):
         start_nodes, final_nodes = generate_rnd_start_and_final(graph)
         hellings = cfpq_with_hellings(
             deepcopy(grammar), deepcopy(graph), start_nodes, final_nodes
@@ -168,4 +177,44 @@ class TestReachabilityMatrixAlgorithm:
         matrix = cfpq_with_matrix(
             deepcopy(grammar), deepcopy(graph), start_nodes, final_nodes
         )
-        assert hellings == matrix
+        tensor = cfpq_with_tensor(
+            cfg_to_rsm(deepcopy(grammar)), deepcopy(graph), start_nodes, final_nodes
+        )
+        assert (hellings == matrix) and (matrix == tensor)
+
+    @pytest.mark.parametrize(
+        "cfg_grammar, ebnf_grammar",
+        (zip(GRAMMARS_DIFFERENT, EBNF_GRAMMARS)),
+        ids=lambda t: t,
+    )
+    def test_ebnf_cfg(self, graph, cfg_grammar, ebnf_grammar):
+        start_nodes, final_nodes = generate_rnd_start_and_final(graph)
+        cfg_cfpq = cfpq_with_tensor(
+            cfg_to_rsm(cfg_grammar), deepcopy(graph), start_nodes, final_nodes
+        )
+        ebnf_cfpq = cfpq_with_tensor(
+            ebnf_to_rsm(ebnf_grammar), deepcopy(graph), start_nodes, final_nodes
+        )
+        assert ebnf_cfpq == cfg_cfpq
+
+    @pytest.mark.parametrize(
+        "regex_str, cfg_list", REGEXP_CFG.items(), ids=lambda regexp_cfgs: regexp_cfgs
+    )
+    def test_cfpq_tensor(self, graph, regex_str, cfg_list):
+        start_nodes, final_nodes = generate_rnd_start_and_final(graph)
+        eq_cfpqs = [
+            cfpq_with_tensor(
+                cfg_to_rsm(deepcopy(cf_gram)), deepcopy(graph), start_nodes, final_nodes
+            )
+            for cf_gram in cfg_list
+        ]
+        eq_cfpqs.append(
+            cfpq_with_tensor(
+                ebnf_to_rsm(f"S -> {regex_str}"),
+                deepcopy(graph),
+                start_nodes,
+                final_nodes,
+            )
+        )
+        for a, b in itertools.combinations(eq_cfpqs, 2):
+            assert a == b
