@@ -23,6 +23,8 @@ def reachability_with_constraints(fa: FiniteAutomaton, constraints_fa: FiniteAut
 
     for start, end in zip(*closure.nonzero()):
         if start in intersection.start_states and end in intersection.final_states:
-            result[state_mapping[start // constraints_len]].add(state_mapping[end // constraints_len])
+            result[state_mapping[start // constraints_len]].add(
+                state_mapping[end // constraints_len]
+            )
 
     return result

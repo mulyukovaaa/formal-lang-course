@@ -10,20 +10,26 @@ class FiniteAutomaton:
     lbl = True
 
     def __init__(
-            self,
-            fa: NondeterministicFiniteAutomaton = None,
-            *,
-            matrix=None,
-            start_states=None,
-            final_states=None,
-            states_to_int=None,
-            bad_states=False,
-            epsilons=None
+        self,
+        fa: NondeterministicFiniteAutomaton = None,
+        *,
+        matrix=None,
+        start_states=None,
+        final_states=None,
+        states_to_int=None,
+        bad_states=False,
+        epsilons=None
     ):
-        self.matrix = matrix if fa is None else to_matrix(fa, {v: i for i, v in enumerate(fa.states)})
+        self.matrix = (
+            matrix
+            if fa is None
+            else to_matrix(fa, {v: i for i, v in enumerate(fa.states)})
+        )
         self.start_states = start_states if fa is None else fa.start_states
         self.final_states = final_states if fa is None else fa.final_states
-        self.states_to_int = states_to_int if fa is None else {v: i for i, v in enumerate(fa.states)}
+        self.states_to_int = (
+            states_to_int if fa is None else {v: i for i, v in enumerate(fa.states)}
+        )
         self.nfa = to_nfa(self) if fa is None and not bad_states else fa
         self.epsilons = epsilons if fa is None else None
 
@@ -125,7 +131,9 @@ def rsm_to_fa(rsm: RecursiveAutomaton) -> FiniteAutomaton:
         for frm, transition in enfa.dfa.to_dict().items():
             for symbol, to in transition.items():
                 if symbol not in matrix:
-                    matrix[symbol.value] = dok_matrix((len(states), len(states)), dtype=bool)
+                    matrix[symbol.value] = dok_matrix(
+                        (len(states), len(states)), dtype=bool
+                    )
                 for target in to_set(to):
                     matrix[symbol.value][
                         states_to_int[State((label, frm.value))],
@@ -161,11 +169,7 @@ def to_nfa(fa: FiniteAutomaton) -> NondeterministicFiniteAutomaton:
         for start in range(fa.matrix[symbol].shape[0]):
             for end in range(fa.matrix[symbol].shape[0]):
                 if fa.matrix[symbol][start, end]:
-                    nfa.add_transition(
-                        State(start),
-                        symbol,
-                        State(end)
-                    )
+                    nfa.add_transition(State(start), symbol, State(end))
 
     for state in fa.start_states:
         nfa.add_start_state(State(state))
@@ -176,7 +180,7 @@ def to_nfa(fa: FiniteAutomaton) -> NondeterministicFiniteAutomaton:
 
 
 def intersect_automata(
-        automaton1: FiniteAutomaton, automaton2: FiniteAutomaton, lbl=True
+    automaton1: FiniteAutomaton, automaton2: FiniteAutomaton, lbl=True
 ) -> FiniteAutomaton:
     """
     Выполняет пересечение двух конечных автоматов.
@@ -242,7 +246,7 @@ def transitive_closure(fa: FiniteAutomaton):
 
 
 def paths_ends(
-        graph: MultiDiGraph, start_nodes: set[int], final_nodes: set[int], regex: str
+    graph: MultiDiGraph, start_nodes: set[int], final_nodes: set[int], regex: str
 ) -> list[tuple[object, object]]:
     """
     Находит пути в графе, которые заканчиваются в конечных узлах и
