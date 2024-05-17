@@ -22,7 +22,7 @@ def regex_to_dfa(regex: str) -> DeterministicFiniteAutomaton:
     DeterministicFiniteAutomaton
         Created minimized deterministic finite automaton.
     """
-    return Regex(regex).to_epsilon_nfa().minimize()
+    return Regex(regex).to_epsilon_nfa().to_deterministic().minimize()
 
 
 def graph_to_nfa(
