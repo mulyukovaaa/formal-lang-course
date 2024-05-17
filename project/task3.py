@@ -1,253 +1,279 @@
+from typing import Iterable
+from networkx import MultiDiGraph
 from pyformlang.finite_automaton import *
-from scipy.sparse import *
-from networkx import *
-from typing import *
-
-from project.finite_automatons import regex_to_dfa, graph_to_nfa
-
-from itertools import product
+from pyformlang.rsa import RecursiveAutomaton
+from scipy.sparse import dok_matrix, kron
+from project.task2 import graph_to_nfa, regex_to_dfa
 
 
 class FiniteAutomaton:
-    def __init__(self, nondeterministic_automaton=None):
-        """
-        Конструктор класса FiniteAutomaton.
+    lbl = True
 
-        Параметры:
-        - nka: Объект DeterministicFiniteAutomaton или NondeterministicFiniteAutomaton,
-               который будет преобразован в конечный автомат.
-
-        Пример использования:
-        >>> automaton = FiniteAutomaton(nka)
-        """
-        if nondeterministic_automaton is None:
-            return
-
-        # Создаем словарь для отображения индексов состояний на сами состояния
-        state_index_map = {
-            state: index
-            for index, state in enumerate(nondeterministic_automaton.states)
-        }
-
-        # Сохраняем список состояний
-        self.state_index_map = list(nondeterministic_automaton.states)
-
-        # Сохраняем начальные и конечные состояния
-        self.start_states = {
-            state_index_map[st] for st in nondeterministic_automaton.start_states
-        }
-        self.final_states = {
-            state_index_map[fi] for fi in nondeterministic_automaton.final_states
-        }
-
-        # Создаем словарь для хранения функций переходов
-        self.transition_functions = {}
-
-        # Получаем словарь переходов из nka
-        states_dict = nondeterministic_automaton.to_dict()
-        num_states = len(nondeterministic_automaton.states)
-
-        # Заполняем словарь функций переходов
-        for symbols in nondeterministic_automaton.symbols:
-            self.transition_functions[symbols] = dok_matrix(
-                (num_states, num_states), dtype=bool
-            )
-            for current_state, next_state_set in states_dict.items():
-                if symbols in next_state_set:
-                    for next_state in (
-                        next_state_set[symbols]
-                        if isinstance(next_state_set[symbols], set)
-                        else {next_state_set[symbols]}
-                    ):
-                        self.transition_functions[symbols][
-                            state_index_map[current_state], state_index_map[next_state]
-                        ] = True
+    def __init__(
+        self,
+        fa: NondeterministicFiniteAutomaton = None,
+        *,
+        matrix=None,
+        start_states=None,
+        final_states=None,
+        states_to_int=None,
+        bad_states=False,
+        epsilons=None
+    ):
+        self.matrix = (
+            matrix
+            if fa is None
+            else to_matrix(fa, {v: i for i, v in enumerate(fa.states)})
+        )
+        self.start_states = start_states if fa is None else fa.start_states
+        self.final_states = final_states if fa is None else fa.final_states
+        self.states_to_int = (
+            states_to_int if fa is None else {v: i for i, v in enumerate(fa.states)}
+        )
+        self.nfa = to_nfa(self) if fa is None and not bad_states else fa
+        self.epsilons = epsilons if fa is None else None
 
     def accepts(self, word: Iterable[Symbol]) -> bool:
         """
         Проверяет, принимает ли автомат заданное слово.
 
-        Параметры:
-        - word: Итерируемый объект, содержащий символы, которые должны быть проверены.
+        Args:
+            word (Iterable[Symbol]): Слово для проверки.
 
-        Возвращает:
-        - bool: True, если автомат принимает слово, иначе False.
-
-        Пример использования:
-        >>> automaton.accepts(['a', 'b', 'c'])
-        True
+        Returns:
+            bool: True, если автомат принимает слово, иначе False.
         """
+        return self.nfa.accepts(word)
 
-        temp_nondeterministic_automaton = NondeterministicFiniteAutomaton()
-
-        # Добавляем переходы в nka
-        for transition_symbol, transition_matrix in self.transition_functions.items():
-            temp_nondeterministic_automaton.add_transitions(
-                [
-                    (start_state, transition_symbol, end_state)
-                    for (start_state, end_state) in product(
-                        range(transition_matrix.shape[0]), repeat=2
-                    )
-                    if self.transition_functions[transition_symbol][
-                        start_state, end_state
-                    ]
-                ]
-            )
-
-        # Добавляем начальные и конечные состояния в nka
-        for start_state in self.start_states:
-            temp_nondeterministic_automaton.add_start_state(start_state)
-        for final_state in self.final_states:
-            temp_nondeterministic_automaton.add_final_state(final_state)
-
-        # Проверяем, принимает ли nka заданное слово
-        return temp_nondeterministic_automaton.accepts(word)
-
-    # Метод для проверки, является ли автомат пустым
     def is_empty(self) -> bool:
         """
-        Проверяет, является ли язык, задающийся автоматом, пустым.
+        Проверяет, является ли автомат пустым.
 
-        Возвращает:
-        - bool: True, если язык пуст, иначе False.
-
-        Пример использования:
-        >>> automaton.is_empty()
-        False
+        Returns:
+            bool: True, если автомат пуст, иначе False.
         """
-        # Если в автомате нет функций переходов, он считается пустым
-        if len(self.transition_functions) == 0:
-            return True
+        return self.nfa.is_empty()
 
-        # Создаем матрицу, которая представляет все переходы в автомате
-        transition_matrix = sum(self.transition_functions.values())
+    def labels(self):
+        """
+        Возвращает множество меток (символов), используемых в автомате.
 
-        # Выполняем операцию Крона для получения матрицы переходов
-        for _ in range(transition_matrix.shape[0]):
-            transition_matrix += transition_matrix @ transition_matrix
+        Returns:
+            set: Множество меток.
+        """
+        return self.states_to_int.keys() if self.lbl else self.matrix.keys()
 
-        return not any(
-            transition_matrix[start_state, final_state]
-            for start_state, final_state in product(
-                self.start_states, self.final_states
-            )
-        )
+    def mapping_indexs(self, u):
+        return self.states_to_int[State(u)]
+
+    def labels(self):
+        return self.states_to_int.keys() if self.lbl else self.matrix.keys()
+
+    def revert_mapping(self):
+        return {i: v for v, i in self.states_to_int.items()}
+
+
+def to_set(state):
+    """
+    Преобразует входное состояние в множество, если оно
+    уже является множеством, иначе возвращает его как множество.
+
+    Args:
+        state: Входное состояние.
+
+    Returns:
+        set: Множество состояний.
+    """
+    return state if isinstance(state, set) else {state}
+
+
+def to_matrix(fa: NondeterministicFiniteAutomaton, states_to_int=None):
+    """
+    Преобразует неразрешимый конечный автомат в матрицу переходов.
+
+    Args:
+        fa (NondeterministicFiniteAutomaton): Неразрешимый конечный автомат.
+        states_to_int (dict, optional): Словарь для преобразования состояний в целые числа. По умолчанию None.
+
+    Returns:
+        dict: Словарь, где ключи - это символы, а значения - матрицы переходов.
+    """
+    result = dict()
+
+    for symbol in fa.symbols:
+        result[symbol] = dok_matrix((len(fa.states), len(fa.states)), dtype=bool)
+        for start, edges in fa.to_dict().items():
+            if symbol in edges:
+                for end in to_set(edges[symbol]):
+                    result[symbol][states_to_int[start], states_to_int[end]] = True
+
+    return result
+
+
+def rsm_to_fa(rsm: RecursiveAutomaton) -> FiniteAutomaton:
+    states = set()
+    start_states = set()
+    final_states = set()
+    epsilons = set()
+
+    for label, enfa in rsm.boxes.items():
+        for state in enfa.dfa.states:
+            states.add(State((label, state.value)))
+            if state in enfa.dfa.start_states:
+                start_states.add(State((label, state.value)))
+            if state in enfa.dfa.final_states:
+                final_states.add(State((label, state.value)))
+
+    states_to_int = {s: i for i, s in enumerate(states)}
+
+    matrix = dict()
+    for label, enfa in rsm.boxes.items():
+        for frm, transition in enfa.dfa.to_dict().items():
+            for symbol, to in transition.items():
+                if symbol not in matrix:
+                    matrix[symbol.value] = dok_matrix(
+                        (len(states), len(states)), dtype=bool
+                    )
+                for target in to_set(to):
+                    matrix[symbol.value][
+                        states_to_int[State((label, frm.value))],
+                        states_to_int[State((label, target.value))],
+                    ] = True
+                if isinstance(to, Epsilon):
+                    epsilons.add(label)
+
+    return FiniteAutomaton(
+        fa=None,
+        matrix=matrix,
+        start_states=start_states,
+        final_states=final_states,
+        states_to_int=states_to_int,
+        bad_states=True,
+        epsilons=epsilons,
+    )
+
+
+def to_nfa(fa: FiniteAutomaton) -> NondeterministicFiniteAutomaton:
+    """
+    Преобразует конечный автомат в неразрешимый конечный автомат.
+
+    Args:
+        fa (FiniteAutomaton): Конечный автомат.
+
+    Returns:
+        NondeterministicFiniteAutomaton: Неразрешимый конечный автомат.
+    """
+    nfa = NondeterministicFiniteAutomaton()
+
+    for symbol in fa.matrix.keys():
+        for start in range(fa.matrix[symbol].shape[0]):
+            for end in range(fa.matrix[symbol].shape[0]):
+                if fa.matrix[symbol][start, end]:
+                    nfa.add_transition(State(start), symbol, State(end))
+
+    for state in fa.start_states:
+        nfa.add_start_state(State(state))
+    for state in fa.final_states:
+        nfa.add_final_state(State(state))
+
+    return nfa
 
 
 def intersect_automata(
-    automaton1: FiniteAutomaton, automaton2: FiniteAutomaton
+    automaton1: FiniteAutomaton, automaton2: FiniteAutomaton, lbl=True
 ) -> FiniteAutomaton:
     """
     Выполняет пересечение двух конечных автоматов.
 
-    Параметры:
-    - automaton1: Первый конечный автомат.
-    - automaton2: Второй конечный автомат.
+    Args:
+        automaton1 (FiniteAutomaton): Первый конечный автомат.
+        automaton2 (FiniteAutomaton): Второй конечный автомат.
+        lbl (bool, optional): Флаг, указывающий, следует ли использовать метки. По умолчанию True.
 
-    Возвращает:
-    - FiniteAutomaton: Новый конечный автомат, представляющий пересечение двух входных автоматов.
-
-    Пример использования:
-    >>> new_automaton = intersect_automata(automaton1, automaton2)
+    Returns:
+        FiniteAutomaton: Результат пересечения.
     """
-    # Находим общие ключи для функций переходов обоих автоматов
-    common_keys = (
-        automaton1.transition_functions.keys() & automaton2.transition_functions.keys()
+    automaton1.lbl = automaton2.lbl = not lbl
+    labels = automaton1.labels() & automaton2.labels()
+    matrix = dict()
+    start_states = set()
+    final_states = set()
+    states_to_int = dict()
+
+    for label in labels:
+        matrix[label] = kron(automaton1.matrix[label], automaton2.matrix[label], "csr")
+
+    for state1, int1 in automaton1.states_to_int.items():
+        for state2, int2 in automaton2.states_to_int.items():
+            combined_state = (state1, state2)
+            combined_int = len(automaton2.states_to_int) * int1 + int2
+            states_to_int[combined_state] = combined_int
+
+            if state1 in automaton1.start_states and state2 in automaton2.start_states:
+                start_states.add(State(combined_int))
+
+            if state1 in automaton1.final_states and state2 in automaton2.final_states:
+                final_states.add(State(combined_int))
+
+    return FiniteAutomaton(
+        matrix=matrix,
+        start_states=start_states,
+        final_states=final_states,
+        states_to_int=states_to_int,
     )
-    new_automaton = FiniteAutomaton()
-    new_automaton.transition_functions = {}
 
-    # Для каждого общего ключа выполняем операцию Крона
-    for key in common_keys:
-        new_automaton.transition_functions[key] = kron(
-            automaton1.transition_functions[key],
-            automaton2.transition_functions[key],
-            "csr",
-        )
 
-    # Определяем начальные и конечные состояния нового автомата
-    new_automaton.start_states = set()
-    new_automaton.final_states = set()
+def transitive_closure(fa: FiniteAutomaton):
+    """
+    Вычисляет транзитивное замкнутость матрицы переходов конечного автомата.
 
-    num_states2 = (
-        automaton2.transition_functions.values().__iter__().__next__().shape[0]
-    )
+    Args:
+        fa (FiniteAutomaton): Конечный автомат.
 
-    for state1, state2 in product(automaton1.start_states, automaton2.start_states):
-        new_automaton.start_states.add(state1 * (num_states2) + state2)
+    Returns:
+        dok_matrix: Матрица транзитивного замкнутости.
+    """
+    if len(fa.matrix.values()) == 0:
+        return dok_matrix((0, 0), dtype=bool)
 
-    for state1, state2 in product(automaton1.final_states, automaton2.final_states):
-        new_automaton.final_states.add(state1 * (num_states2) + state2)
+    front = sum(fa.matrix.values(), dok_matrix((0, 0), dtype=bool))
+    prev = 0
+    while front.count_nonzero() != prev:
+        prev = front.count_nonzero()
+        front += front @ front
 
-    return new_automaton
+    return front
 
 
 def paths_ends(
     graph: MultiDiGraph, start_nodes: set[int], final_nodes: set[int], regex: str
-) -> list[tuple[int, int]]:
+) -> list[tuple[object, object]]:
     """
-    Находит пары вершин в графе, которые связаны путем, формирующим слово из языка, задаваемого регулярным выражением.
+    Находит пути в графе, которые заканчиваются в конечных узлах и
+    соответствуют заданному регулярному выражению.
 
-    Параметры:
-    - graph: Объект MultiDiGraph, представляющий граф.
-    - start_nodes: Множество начальных вершин графа.
-    - final_nodes: Множество конечных вершин графа.
-    - regex: Регулярное выражение, задающее язык.
+    Args:
+        graph (MultiDiGraph): Граф.
+        start_nodes (set[int]): Начальные узлы.
+        final_nodes (set[int]): Конечные узлы.
+        regex (str): Регулярное выражение.
 
-    Возвращает:
-    - list[tuple[int, int]]: Список пар вершин, которые связаны путем, формирующим слово из языка, задаваемого регулярным выражением.
-
-    Пример использования:
-    >>> paths = paths_ends(graph, {1, 2}, {3, 4}, 'a*b')
-    [(1, 3), (2, 4)]
+    Returns:
+        list[tuple[object, object]]: Список кортежей, представляющих пути.
     """
-    # Создаем конечный автомат из графа, используя функцию graph_to_nfa,
-    # которая преобразует граф в недетерминированный конечный автомат (NFA).
-    finite_automaton_from_graph = FiniteAutomaton(
-        graph_to_nfa(graph, start_nodes, final_nodes)
-    )
+    graph_fa = FiniteAutomaton(graph_to_nfa(graph, start_nodes, final_nodes))
+    regex_fa = FiniteAutomaton(regex_to_dfa(regex))
+    intersect = intersect_automata(graph_fa, regex_fa, lbl=False)
 
-    # Создаем конечный автомат из регулярного выражения, используя функцию regex_to_dfa,
-    # которая преобразует регулярное выражение в детерминированный конечный автомат (DFA).
-    finite_automaton_from_regex = FiniteAutomaton(regex_to_dfa(regex))
-
-    # Выполняем пересечение двух автоматов, полученных на предыдущих шагах.
-    intersected_automaton = intersect_automata(
-        finite_automaton_from_graph, finite_automaton_from_regex
-    )
-
-    # Если в полученном автомате нет функций переходов, возвращаем пустой список.
-    if not intersected_automaton.transition_functions:
-        return []
-
-    # Создаем матрицу, которая представляет все переходы в полученном автомате.
-    transition_matrix = sum(intersected_automaton.transition_functions.values())
-
-    # Выполняем операцию Крона для получения матрицы переходов.
-    for _ in range(transition_matrix.shape[0]):
-        transition_matrix += transition_matrix @ transition_matrix
-
-    # Определяем количество состояний в автомате, соответствующем регулярному выражению.
-    n_states2 = (
-        finite_automaton_from_regex.transition_functions.values()
-        .__iter__()
-        .__next__()
-        .shape[0]
-    )
-
-    # Функция для преобразования индексов состояний в узлы графа.
-    convert_to_node = lambda i: finite_automaton_from_graph.state_index_map[
-        i // n_states2
-    ].value
-
-    # Используем функцию product из модуля itertools для генерации декартового произведения
-    # начальных и конечных состояний полученного автомата.
-    # Для каждой пары состояний проверяем, существует ли путь между ними,
-    # используя матрицу переходов m. Если путь существует, добавляем его в результат.
-    return [
-        (convert_to_node(st), convert_to_node(fi))
-        for st, fi in product(
-            intersected_automaton.start_states, intersected_automaton.final_states
-        )
-        if transition_matrix[st, fi] != 0
-    ]
+    closure = transitive_closure(intersect)
+    reg_size = len(regex_fa.states_to_int)
+    result = list()
+    for start, end in zip(*closure.nonzero()):
+        if start in intersect.start_states and end in intersect.final_states:
+            result.append(
+                (
+                    graph_fa.states_to_int[start // reg_size],
+                    graph_fa.states_to_int[end // reg_size],
+                )
+            )
+    return result
