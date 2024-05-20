@@ -44,8 +44,8 @@ select: v_filter? v_filter? 'return' VAR (',' VAR)? 'where' VAR 'reachable' 'fro
 
 v_filter: 'for' VAR 'in' expr ;
 
-VAR: [a-z] [a-z0-9]* ;
-NUM: '0' | [1-9] [0-9]* ;
-CHAR: '"' [a-z] '"' ;
+WS: [ \r\n\t]+ -> skip;
 
-WS: [ \t\r\n]+ -> skip ;
+VAR: [a-z] [a-z_"0-9]*;
+NUM: '0' | ([1-9][0-9]*);
+CHAR: '\u0022' [a-z] '\u0022';
