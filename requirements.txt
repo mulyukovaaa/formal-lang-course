@@ -8,3 +8,4 @@ pydot
 pyformlang
 pytest
 scipy
+antlr4-tools

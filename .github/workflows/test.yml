@@ -21,6 +21,6 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         sudo apt-get install -y graphviz graphviz-dev
-        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
         pip install pygraphviz
+        antlr4 -Dlanguage=Python3 project/language.g4 -visitor
         python ./scripts/run_tests.py
