@@ -1,26 +1,32 @@
-name: Tests
+# This is a basic workflow to help you get started with Actions
 
-on: [push, pull_request]
+name: Pytest
 
-permissions:
-  contents: read
+# Controls when the workflow will run
+on:
+  # Triggers the workflow on push or pull request events
+  [ push, pull_request ]
 
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
-  build:
-
+  test:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
-    - name: Set up Git repository
-      uses: actions/checkout@v3
-    - name: Set up Python 3.11
-      uses: actions/setup-python@v3
-      with:
-        python-version: "3.11"
-    - name: Install dependencies and run tests
-      run: |
-        python -m pip install --upgrade pip
-        sudo apt-get install -y graphviz graphviz-dev
-        pip install pygraphviz
-        antlr4 -Dlanguage=Python3 project/language.g4 -visitor
-        python ./scripts/run_tests.py
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Set up Java
+        run: |
+          antlr4 -Dlanguage=Python3 project/language.g4 -visitor
+      - name: Test with pytest
+        run: |
+          pip install pytest
+          python scripts/run_tests.py
