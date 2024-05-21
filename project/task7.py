@@ -5,6 +5,7 @@ from pyformlang.cfg import CFG, Terminal
 from scipy.sparse import dok_matrix
 from project.task6 import cfg_to_weak_normal_form
 
+
 def cfpq_with_matrix(
     cfg: CFG,
     graph: nx.DiGraph,
@@ -27,7 +28,9 @@ def cfpq_with_matrix(
         if len(production.body) == 0:
             epsilon_set.add(production.head.to_text())
         if len(production.body) == 1 and isinstance(production.body[0], Terminal):
-            terminal_dict.setdefault(production.body[0].to_text(), set()).add(production.head.to_text())
+            terminal_dict.setdefault(production.body[0].to_text(), set()).add(
+                production.head.to_text()
+            )
         matrix_dict[production.head.to_text()] = dok_matrix(
             (graph.number_of_nodes(), graph.number_of_nodes()), dtype=bool
         )
@@ -50,7 +53,9 @@ def cfpq_with_matrix(
     for _ in range(graph.number_of_nodes() ** 2):
         for nonterminal, nonterminal_pairs in nonterminal_dict.items():
             for left_nonterminal, right_nonterminal in nonterminal_pairs:
-                new_matrix_dict[nonterminal] += matrix_dict[left_nonterminal] @ matrix_dict[right_nonterminal]
+                new_matrix_dict[nonterminal] += (
+                    matrix_dict[left_nonterminal] @ matrix_dict[right_nonterminal]
+                )
         for nonterminal, m in new_matrix_dict.items():
             matrix_dict[nonterminal] += m
 

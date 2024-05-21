@@ -19,13 +19,18 @@ class FiniteAutomaton:
         states=None,
         from_rsm=False,
     ):
-        self.matrix = matrix if fa is None else to_matrix(fa, {v: i for i, v in enumerate(fa.states)})
+        self.matrix = (
+            matrix
+            if fa is None
+            else to_matrix(fa, {v: i for i, v in enumerate(fa.states)})
+        )
         self.start_states = start_states if fa is None else fa.start_states
         self.final_states = final_states if fa is None else fa.final_states
-        self.states_to_int = states_to_int if fa is None else {v: i for i, v in enumerate(fa.states)}
+        self.states_to_int = (
+            states_to_int if fa is None else {v: i for i, v in enumerate(fa.states)}
+        )
         self.states = states if fa is None else list(fa.states)
         self.nfa = to_nfa(self) if fa is None and not from_rsm else fa
-
 
     def accepts(self, word: Iterable[Symbol]) -> bool:
         """
@@ -160,7 +165,9 @@ def to_nfa(fa: FiniteAutomaton) -> NondeterministicFiniteAutomaton:
     return nfa
 
 
-def intersect_automata(automaton1: FiniteAutomaton, automaton2: FiniteAutomaton) -> FiniteAutomaton:
+def intersect_automata(
+    automaton1: FiniteAutomaton, automaton2: FiniteAutomaton
+) -> FiniteAutomaton:
     """
     Выполняет пересечение двух конечных автоматов.
 
@@ -227,7 +234,9 @@ def transitive_closure(fa: FiniteAutomaton):
     return front
 
 
-def paths_ends(graph: MultiDiGraph, start_nodes: set[int], final_nodes: set[int], regex: str) -> list[tuple[object, object]]:
+def paths_ends(
+    graph: MultiDiGraph, start_nodes: set[int], final_nodes: set[int], regex: str
+) -> list[tuple[object, object]]:
     """
     Находит пути в графе, которые заканчиваются в конечных узлах и
     соответствуют заданному регулярному выражению.
@@ -249,8 +258,13 @@ def paths_ends(graph: MultiDiGraph, start_nodes: set[int], final_nodes: set[int]
     inter_start_states = {intersect.states_to_int[i] for i in intersect.start_states}
     inter_final_states = {intersect.states_to_int[i] for i in intersect.final_states}
 
-    result = {(graph_fa.states[state // regex_fa_n].value, graph_fa.states[state // regex_fa_n].value)
-              for state in inter_start_states & inter_final_states}
+    result = {
+        (
+            graph_fa.states[state // regex_fa_n].value,
+            graph_fa.states[state // regex_fa_n].value,
+        )
+        for state in inter_start_states & inter_final_states
+    }
 
     if not intersect.matrix:
         return list(result)
@@ -263,6 +277,11 @@ def paths_ends(graph: MultiDiGraph, start_nodes: set[int], final_nodes: set[int]
 
     for start, end in product(inter_start_states, inter_final_states):
         if matrix[start, end] != 0:
-            result.add((graph_fa.states[start // regex_fa_n].value, graph_fa.states[end // regex_fa_n].value))
+            result.add(
+                (
+                    graph_fa.states[start // regex_fa_n].value,
+                    graph_fa.states[end // regex_fa_n].value,
+                )
+            )
 
     return list(result)

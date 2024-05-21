@@ -32,9 +32,13 @@ def cfpq_with_hellings(
         if len(production.body) == 0:
             productions_epsilon.add(production.head)
         if len(production.body) == 1 and isinstance(production.body[0], Terminal):
-            productions_single_terminal.setdefault(production.head, set()).add(production.body[0])
+            productions_single_terminal.setdefault(production.head, set()).add(
+                production.body[0]
+            )
         elif len(production.body) == 2:
-            productions_double_nonterminals.setdefault(production.head, set()).add((production.body[0], production.body[1]))
+            productions_double_nonterminals.setdefault(production.head, set()).add(
+                (production.body[0], production.body[1])
+            )
 
     reachability_set = {
         (nonterminal, node, node)
@@ -56,13 +60,27 @@ def cfpq_with_hellings(
         new_reachable = set()
         for nonterminal_j, node_v_, node_u_ in reachability_set:
             if node_v == node_u_:
-                for nonterminal_k, nonterminal_pairs in productions_double_nonterminals.items():
-                    if (nonterminal_j, nonterminal_i) in nonterminal_pairs and (nonterminal_k, node_v_, node_u) not in reachability_set:
+                for (
+                    nonterminal_k,
+                    nonterminal_pairs,
+                ) in productions_double_nonterminals.items():
+                    if (nonterminal_j, nonterminal_i) in nonterminal_pairs and (
+                        nonterminal_k,
+                        node_v_,
+                        node_u,
+                    ) not in reachability_set:
                         work_set.add((nonterminal_k, node_v_, node_u))
                         new_reachable.add((nonterminal_k, node_v_, node_u))
             if node_v_ == node_u:
-                for nonterminal_k, nonterminal_pairs in productions_double_nonterminals.items():
-                    if (nonterminal_i, nonterminal_j) in nonterminal_pairs and (nonterminal_k, node_v, node_u_) not in reachability_set:
+                for (
+                    nonterminal_k,
+                    nonterminal_pairs,
+                ) in productions_double_nonterminals.items():
+                    if (nonterminal_i, nonterminal_j) in nonterminal_pairs and (
+                        nonterminal_k,
+                        node_v,
+                        node_u_,
+                    ) not in reachability_set:
                         work_set.add((nonterminal_k, node_v, node_u_))
                         new_reachable.add((nonterminal_k, node_v, node_u_))
         reachability_set |= new_reachable
@@ -70,5 +88,7 @@ def cfpq_with_hellings(
     return {
         (node_v, node_u)
         for nonterminal_i, node_v, node_u in reachability_set
-        if node_v in start_nodes and node_u in final_nodes and nonterminal_i == cfg.start_symbol
+        if node_v in start_nodes
+        and node_u in final_nodes
+        and nonterminal_i == cfg.start_symbol
     }
