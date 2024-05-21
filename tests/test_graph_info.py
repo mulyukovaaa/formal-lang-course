@@ -1,4 +1,4 @@
-from project.graph_info import *
+from project.task1 import *
 from pathlib import Path
 import filecmp
 import os
