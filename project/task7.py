@@ -1,65 +1,64 @@
-import networkx as nx
-import pyformlang
+import copy
 from typing import Set
-from pyformlang.cfg import Terminal
-from scipy.sparse import lil_matrix
+import networkx as nx
+from pyformlang.cfg import CFG, Terminal
+from scipy.sparse import dok_matrix
 from project.task6 import cfg_to_weak_normal_form
 
 
 def cfpq_with_matrix(
-    grammar: pyformlang.cfg.CFG,
-    graph_data: nx.DiGraph,
-    start_set: Set[int] = None,
-    final_set: Set[int] = None,
+    cfg: CFG,
+    graph: nx.DiGraph,
+    start_nodes: Set[int] = None,
+    final_nodes: Set[int] = None,
 ) -> set[tuple[int, int]]:
-    grammar = cfg_to_weak_normal_form(grammar)
-    nonterminals_set = {rule.head for rule in grammar.productions}
-    var_indices = {var: idx for idx, var in enumerate(nonterminals_set)}
-    adj_matrices_dict = {
-        variable: lil_matrix(
-            (graph_data.number_of_nodes(), graph_data.number_of_nodes()), dtype=bool
+    if start_nodes is None:
+        start_nodes = set(graph.nodes)
+    if final_nodes is None:
+        final_nodes = set(graph.nodes)
+
+    cfg = cfg_to_weak_normal_form(cfg)
+
+    matrix_dict = {}
+    epsilon_set = set()
+    terminal_dict = {}
+    nonterminal_dict = {}
+
+    for production in cfg.productions:
+        if len(production.body) == 0:
+            epsilon_set.add(production.head.to_text())
+        if len(production.body) == 1 and isinstance(production.body[0], Terminal):
+            terminal_dict.setdefault(production.body[0].to_text(), set()).add(
+                production.head.to_text()
+            )
+        matrix_dict[production.head.to_text()] = dok_matrix(
+            (graph.number_of_nodes(), graph.number_of_nodes()), dtype=bool
         )
-        for variable in nonterminals_set
-    }
-
-    for rule in grammar.productions:
-        for edge_data in graph_data.edges(data=True):
-            body_is_terminal = len(rule.body) == 1 and isinstance(
-                rule.body[0], Terminal
+        if len(production.body) == 2:
+            nonterminal_dict.setdefault(production.head.to_text(), set()).add(
+                (production.body[0].to_text(), production.body[1].to_text())
             )
-            edge_label_matches = (
-                str(edge_data[2].get("label", "")) == str(rule.body[0])
-                if body_is_terminal
-                else False
-            )
-            if body_is_terminal and edge_label_matches:
-                adj_matrices_dict[rule.head][edge_data[0], edge_data[1]] = True
 
-    while True:
-        changes_occurred = False
+    for start_node, end_node, label in graph.edges(data="label"):
+        if label in terminal_dict:
+            for terminal_symbol in terminal_dict[label]:
+                matrix_dict[terminal_symbol][start_node, end_node] = True
 
-        for rule in grammar.productions:
-            if len(rule.body) == 2:
-                matrix_a, matrix_b = rule.body
-                if matrix_a in var_indices and matrix_b in var_indices:
-                    before_change = adj_matrices_dict[rule.head].nnz
-                    adj_matrices_dict[rule.head] += (
-                        adj_matrices_dict[matrix_a] * adj_matrices_dict[matrix_b]
-                    )
-                    after_change = adj_matrices_dict[rule.head].nnz
-                    if before_change != after_change:
-                        changes_occurred = True
+    for epsilon_symbol in epsilon_set:
+        matrix_dict[epsilon_symbol].setdiag(True)
 
-        if not changes_occurred:
-            break
+    new_matrix_dict = copy.deepcopy(matrix_dict)
+    [m.clear() for m in new_matrix_dict.values()]
 
-    result_set = set()
-    for variable, matrix_data in adj_matrices_dict.items():
-        if variable == grammar.start_symbol:
-            matrix_data = matrix_data.tocoo()
-            for i, j in zip(matrix_data.row, matrix_data.col):
-                if (start_set is None or i in start_set) and (
-                    final_set is None or j in final_set
-                ):
-                    result_set.add((i, j))
-    return result_set
+    for _ in range(graph.number_of_nodes() ** 2):
+        for nonterminal, nonterminal_pairs in nonterminal_dict.items():
+            for left_nonterminal, right_nonterminal in nonterminal_pairs:
+                new_matrix_dict[nonterminal] += (
+                    matrix_dict[left_nonterminal] @ matrix_dict[right_nonterminal]
+                )
+        for nonterminal, m in new_matrix_dict.items():
+            matrix_dict[nonterminal] += m
+
+    start_symbol = cfg.start_symbol.to_text()
+    ns, ms = matrix_dict[start_symbol].nonzero()
+    return {(n, m) for n, m in zip(ns, ms) if n in start_nodes and m in final_nodes}
