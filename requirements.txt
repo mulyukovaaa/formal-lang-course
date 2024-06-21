@@ -1,6 +1,7 @@
-antlr4-python3-runtime==4.13.1
-black==24.4.2
-cfpq-data==4.0.3
+antlr4-python3-runtime
+antlr4-tools
+black
+cfpq-data
 grammarinator @ git+https://github.com/renatahodovan/grammarinator.git@f3ffa71
 networkx==3.2.1
 pre-commit==3.7.1
