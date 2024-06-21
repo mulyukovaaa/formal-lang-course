@@ -4,8 +4,8 @@ black
 cfpq-data
 grammarinator @ git+https://github.com/renatahodovan/grammarinator.git@f3ffa71
 networkx==3.2.1
-pre-commit
-pydot
-pyformlang
-pytest
-scipy
+pre-commit==3.7.1
+pydot==2.0.0
+pyformlang==1.0.7
+pytest==8.2.1
+scipy==1.13.0
